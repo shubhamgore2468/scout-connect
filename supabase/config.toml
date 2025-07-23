@@ -1,1 +1,7 @@
 project_id = "rtjbdfumggyaltfqdejj"
+
+[functions.search-apollo]
+verify_jwt = false
+
+[functions.send-campaign]
+verify_jwt = false
