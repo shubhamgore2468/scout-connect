@@ -14,7 +14,217 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          apollo_company_id: string | null
+          created_at: string
+          domain: string | null
+          id: string
+          industry: string | null
+          location: string | null
+          name: string
+          size: string | null
+          updated_at: string
+        }
+        Insert: {
+          apollo_company_id?: string | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          location?: string | null
+          name: string
+          size?: string | null
+          updated_at?: string
+        }
+        Update: {
+          apollo_company_id?: string | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          location?: string | null
+          name?: string
+          size?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_campaigns: {
+        Row: {
+          company_id: string
+          created_at: string
+          email_subject: string
+          email_template: string
+          emails_clicked: number | null
+          emails_delivered: number | null
+          emails_opened: number | null
+          emails_sent: number | null
+          id: string
+          position_title: string
+          status: string | null
+          total_emails: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email_subject: string
+          email_template: string
+          emails_clicked?: number | null
+          emails_delivered?: number | null
+          emails_opened?: number | null
+          emails_sent?: number | null
+          id?: string
+          position_title: string
+          status?: string | null
+          total_emails?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email_subject?: string
+          email_template?: string
+          emails_clicked?: number | null
+          emails_delivered?: number | null
+          emails_opened?: number | null
+          emails_sent?: number | null
+          id?: string
+          position_title?: string
+          status?: string | null
+          total_emails?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_logs: {
+        Row: {
+          campaign_id: string
+          clicked_at: string | null
+          content: string
+          created_at: string
+          delivered_at: string | null
+          email: string
+          error_message: string | null
+          id: string
+          opened_at: string | null
+          recruiter_id: string
+          sent_at: string | null
+          status: string | null
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          clicked_at?: string | null
+          content: string
+          created_at?: string
+          delivered_at?: string | null
+          email: string
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          recruiter_id: string
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          clicked_at?: string | null
+          content?: string
+          created_at?: string
+          delivered_at?: string | null
+          email?: string
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          recruiter_id?: string
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_recruiter_id_fkey"
+            columns: ["recruiter_id"]
+            isOneToOne: false
+            referencedRelation: "recruiters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recruiters: {
+        Row: {
+          apollo_contact_id: string | null
+          company_id: string
+          created_at: string
+          department: string | null
+          email: string
+          email_status: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          linkedin_url: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          apollo_contact_id?: string | null
+          company_id: string
+          created_at?: string
+          department?: string | null
+          email: string
+          email_status?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          linkedin_url?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          apollo_contact_id?: string | null
+          company_id?: string
+          created_at?: string
+          department?: string | null
+          email?: string
+          email_status?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          linkedin_url?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruiters_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
