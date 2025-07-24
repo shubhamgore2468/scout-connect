@@ -197,10 +197,26 @@ const CompanySearch = () => {
 
             {searchResult.recruiters.length === 0 ? (
               <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
+                <CardContent className="pt-6 text-center">
                   <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No recruiters with valid emails found for this company.</p>
-                  <p className="text-sm mt-2">Try searching for a different company or check the domain.</p>
+                  {searchResult.message ? (
+                    <div className="space-y-3">
+                      <p className="text-orange-600 font-medium">Apollo.io Plan Limitation</p>
+                      <p className="text-muted-foreground">{searchResult.message}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.open('https://app.apollo.io/', '_blank')}
+                      >
+                        Upgrade Apollo.io Plan
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-muted-foreground">No recruiters with valid emails found for this company.</p>
+                      <p className="text-sm mt-2 text-muted-foreground">Try searching for a different company or check the domain.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : (
