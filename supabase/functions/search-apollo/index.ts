@@ -11,6 +11,244 @@ interface SearchRequest {
   domain?: string;
 }
 
+interface EmailProvider {
+  name: string;
+  findEmail: (firstName: string, lastName: string, domain: string) => Promise<{ email: string | null; status: string; error?: string }>;
+}
+
+// Email provider implementations
+const createEmailProviders = (): EmailProvider[] => {
+  const providers: EmailProvider[] = [];
+
+  // Hunter.io
+  const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
+  if (hunterApiKey) {
+    providers.push({
+      name: 'Hunter.io',
+      findEmail: async (firstName: string, lastName: string, domain: string) => {
+        try {
+          const response = await fetch(
+            `https://api.hunter.io/v2/email-finder?domain=${domain}&first_name=${firstName}&last_name=${lastName}&api_key=${hunterApiKey}`,
+            { method: 'GET' }
+          );
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 401 || errorText.includes('limit') || errorText.includes('quota')) {
+              return { email: null, status: 'limit_reached', error: 'API limit reached' };
+            }
+            return { email: null, status: 'error', error: `HTTP ${response.status}` };
+          }
+
+          const data = await response.json();
+          return {
+            email: data.data?.email || null,
+            status: data.data?.confidence > 70 ? 'high_confidence' : 'low_confidence'
+          };
+        } catch (error) {
+          return { email: null, status: 'error', error: error.message };
+        }
+      }
+    });
+  }
+
+  // Snov.io
+  const snovApiKey = Deno.env.get('SNOV_API_KEY');
+  if (snovApiKey) {
+    providers.push({
+      name: 'Snov.io',
+      findEmail: async (firstName: string, lastName: string, domain: string) => {
+        try {
+          const response = await fetch('https://app.snov.io/restapi/get-emails-from-names', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${snovApiKey}`
+            },
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              domain
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
+              return { email: null, status: 'limit_reached', error: 'API limit reached' };
+            }
+            return { email: null, status: 'error', error: `HTTP ${response.status}` };
+          }
+
+          const data = await response.json();
+          return {
+            email: data.emails?.[0]?.email || null,
+            status: data.emails?.[0]?.email ? 'found' : 'not_found'
+          };
+        } catch (error) {
+          return { email: null, status: 'error', error: error.message };
+        }
+      }
+    });
+  }
+
+  // RocketReach
+  const rocketreachApiKey = Deno.env.get('ROCKETREACH_API_KEY');
+  if (rocketreachApiKey) {
+    providers.push({
+      name: 'RocketReach',
+      findEmail: async (firstName: string, lastName: string, domain: string) => {
+        try {
+          const response = await fetch('https://api.rocketreach.co/v1/api/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Api-Key': rocketreachApiKey
+            },
+            body: JSON.stringify({
+              query: {
+                name: [`${firstName} ${lastName}`],
+                current_employer: [domain.split('.')[0]]
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 429 || errorText.includes('limit') || errorText.includes('quota')) {
+              return { email: null, status: 'limit_reached', error: 'API limit reached' };
+            }
+            return { email: null, status: 'error', error: `HTTP ${response.status}` };
+          }
+
+          const data = await response.json();
+          const email = data.profiles?.[0]?.emails?.[0]?.email;
+          return {
+            email: email || null,
+            status: email ? 'found' : 'not_found'
+          };
+        } catch (error) {
+          return { email: null, status: 'error', error: error.message };
+        }
+      }
+    });
+  }
+
+  // Voila Norbert
+  const voilaNorbertApiKey = Deno.env.get('VOILA_NORBERT_API_KEY');
+  if (voilaNorbertApiKey) {
+    providers.push({
+      name: 'Voila Norbert',
+      findEmail: async (firstName: string, lastName: string, domain: string) => {
+        try {
+          const response = await fetch('https://api.voilanorbert.com/2018-01-08/search/name', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${voilaNorbertApiKey}`
+            },
+            body: JSON.stringify({
+              name: `${firstName} ${lastName}`,
+              domain
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
+              return { email: null, status: 'limit_reached', error: 'API limit reached' };
+            }
+            return { email: null, status: 'error', error: `HTTP ${response.status}` };
+          }
+
+          const data = await response.json();
+          return {
+            email: data.email?.email || null,
+            status: data.email?.score > 70 ? 'high_confidence' : 'low_confidence'
+          };
+        } catch (error) {
+          return { email: null, status: 'error', error: error.message };
+        }
+      }
+    });
+  }
+
+  // FindThatLead
+  const findThatLeadApiKey = Deno.env.get('FINDTHATLEAD_API_KEY');
+  if (findThatLeadApiKey) {
+    providers.push({
+      name: 'FindThatLead',
+      findEmail: async (firstName: string, lastName: string, domain: string) => {
+        try {
+          const response = await fetch('https://api.findthatlead.com/v1/getEmail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${findThatLeadApiKey}`
+            },
+            body: JSON.stringify({
+              name: `${firstName} ${lastName}`,
+              domain
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
+              return { email: null, status: 'limit_reached', error: 'API limit reached' };
+            }
+            return { email: null, status: 'error', error: `HTTP ${response.status}` };
+          }
+
+          const data = await response.json();
+          return {
+            email: data.email || null,
+            status: data.email ? 'found' : 'not_found'
+          };
+        } catch (error) {
+          return { email: null, status: 'error', error: error.message };
+        }
+      }
+    });
+  }
+
+  return providers;
+};
+
+// Multi-provider email finder with automatic fallback
+const findEmailWithFallback = async (firstName: string, lastName: string, domain: string): Promise<{ email: string | null; status: string; provider?: string }> => {
+  const providers = createEmailProviders();
+  
+  if (providers.length === 0) {
+    return { email: null, status: 'no_providers', provider: 'none' };
+  }
+
+  for (const provider of providers) {
+    console.log(`Trying ${provider.name} for ${firstName} ${lastName}@${domain}`);
+    
+    const result = await provider.findEmail(firstName, lastName, domain);
+    
+    if (result.email) {
+      console.log(`Found email with ${provider.name}: ${result.email}`);
+      return { 
+        email: result.email, 
+        status: result.status, 
+        provider: provider.name 
+      };
+    }
+    
+    if (result.status === 'limit_reached') {
+      console.log(`${provider.name} limit reached, trying next provider...`);
+      continue;
+    }
+    
+    // If not found but no limit reached, try next provider anyway
+    console.log(`${provider.name} did not find email, trying next provider...`);
+  }
+  
+  return { email: null, status: 'not_found', provider: 'all_exhausted' };
+};
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -194,17 +432,41 @@ const handler = async (req: Request): Promise<Response> => {
     const contactData = await contactSearchResponse.json();
     console.log(`Found ${contactData.people?.length || 0} contacts`);
 
-    // Step 4: Save recruiters to database
+    // Step 4: Process recruiters with multi-provider email finding
     const recruiters = [];
     if (contactData.people && contactData.people.length > 0) {
       for (const person of contactData.people) {
-        if (person.email) {
+        let finalEmail = person.email;
+        let emailStatus = person.email_status || 'unknown';
+        let emailProvider = 'Apollo.io';
+
+        // If Apollo doesn't provide email or email is invalid, try other providers
+        if (!finalEmail || emailStatus === 'invalid' || emailStatus === 'unknown') {
+          if (person.first_name && person.last_name && companyRecord.domain) {
+            console.log(`Trying alternative email providers for ${person.first_name} ${person.last_name}`);
+            const emailResult = await findEmailWithFallback(
+              person.first_name, 
+              person.last_name, 
+              companyRecord.domain
+            );
+            
+            if (emailResult.email) {
+              finalEmail = emailResult.email;
+              emailStatus = emailResult.status;
+              emailProvider = emailResult.provider || 'Unknown';
+              console.log(`Found email via ${emailProvider}: ${finalEmail}`);
+            }
+          }
+        }
+
+        // Only save if we have an email
+        if (finalEmail) {
           try {
             const { data: existingRecruiter, error: recruiterFetchError } = await supabase
               .from('recruiters')
               .select('*')
               .eq('company_id', companyRecord.id)
-              .eq('email', person.email)
+              .eq('email', finalEmail)
               .single();
 
             if (existingRecruiter) {
@@ -218,7 +480,7 @@ const handler = async (req: Request): Promise<Response> => {
                   department: person.functions?.[0],
                   linkedin_url: person.linkedin_url,
                   apollo_contact_id: person.id,
-                  email_status: person.email_status || 'unknown',
+                  email_status: emailStatus,
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', existingRecruiter.id)
@@ -226,6 +488,8 @@ const handler = async (req: Request): Promise<Response> => {
                 .single();
 
               if (!updateError) {
+                // Add provider info to the recruiter object for response
+                updatedRecruiter.email_provider = emailProvider;
                 recruiters.push(updatedRecruiter);
               }
             } else {
@@ -234,19 +498,21 @@ const handler = async (req: Request): Promise<Response> => {
                 .from('recruiters')
                 .insert({
                   company_id: companyRecord.id,
-                  email: person.email,
+                  email: finalEmail,
                   first_name: person.first_name,
                   last_name: person.last_name,
                   title: person.title,
                   department: person.functions?.[0],
                   linkedin_url: person.linkedin_url,
                   apollo_contact_id: person.id,
-                  email_status: person.email_status || 'unknown'
+                  email_status: emailStatus
                 })
                 .select()
                 .single();
 
               if (!insertError) {
+                // Add provider info to the recruiter object for response
+                newRecruiter.email_provider = emailProvider;
                 recruiters.push(newRecruiter);
               }
             }
@@ -254,6 +520,8 @@ const handler = async (req: Request): Promise<Response> => {
             console.error('Error saving recruiter:', error);
             // Continue with other recruiters
           }
+        } else {
+          console.log(`No email found for ${person.first_name} ${person.last_name} after trying all providers`);
         }
       }
     }
