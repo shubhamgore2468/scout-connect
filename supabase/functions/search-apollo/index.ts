@@ -160,6 +160,31 @@ const handler = async (req: Request): Promise<Response> => {
     if (!contactSearchResponse.ok) {
       const errorText = await contactSearchResponse.text();
       console.error('Apollo contact search failed:', errorText);
+      
+      // Check if it's a plan limitation error
+      if (contactSearchResponse.status === 403) {
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error && errorData.error.includes('not accessible with this api_key on a free plan')) {
+            console.log('Free plan detected - returning company without recruiters');
+            return new Response(
+              JSON.stringify({
+                company: companyRecord,
+                recruiters: [],
+                totalFound: 0,
+                message: 'Company found successfully. However, recruiter search requires a paid Apollo.io plan. Please upgrade your Apollo.io subscription to access contact information.'
+              }),
+              {
+                status: 200,
+                headers: { "Content-Type": "application/json", ...corsHeaders }
+              }
+            );
+          }
+        } catch (parseError) {
+          // If we can't parse the error, continue with generic error handling
+        }
+      }
+      
       return new Response(
         JSON.stringify({ error: `Failed to fetch contacts: ${contactSearchResponse.status}` }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }

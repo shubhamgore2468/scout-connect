@@ -32,6 +32,7 @@ interface SearchResult {
   company: Company;
   recruiters: Recruiter[];
   totalFound: number;
+  message?: string;
 }
 
 const CompanySearch = () => {
@@ -65,10 +66,20 @@ const CompanySearch = () => {
       }
 
       setSearchResult(data);
-      toast({
-        title: "Search Complete",
-        description: `Found ${data.recruiters.length} recruiters at ${data.company.name}`,
-      });
+      
+      if (data.message) {
+        // Handle plan limitation message
+        toast({
+          title: "Company Found",
+          description: data.message,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Search Complete",
+          description: `Found ${data.recruiters.length} recruiters at ${data.company.name}`,
+        });
+      }
     } catch (error: any) {
       console.error('Search error:', error);
       toast({
