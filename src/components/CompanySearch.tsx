@@ -36,16 +36,16 @@ interface SearchResult {
 }
 
 const CompanySearch = () => {
-  const [domain, setDomain] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const { toast } = useToast();
 
   const handleSearch = async () => {
-    if (!domain.trim()) {
+    if (!companyInput.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a domain name",
+        description: "Please enter a company name or domain",
         variant: "destructive",
       });
       return;
@@ -55,7 +55,7 @@ const CompanySearch = () => {
     try {
       const { data, error } = await supabase.functions.invoke('search-recruiters', {
         body: {
-          domain: domain.trim(),
+          companyInput: companyInput.trim(),
         },
       });
 
@@ -104,12 +104,12 @@ const CompanySearch = () => {
       {/* Search Form */}
       <div className="grid grid-cols-1 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="domain">Domain Name *</Label>
+          <Label htmlFor="companyInput">Company Name or Domain *</Label>
           <Input
-            id="domain"
-            placeholder="e.g., tesla.com, microsoft.com, stripe.com"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
+            id="companyInput"
+            placeholder="e.g., Tesla, tesla.com, Microsoft, microsoft.com"
+            value={companyInput}
+            onChange={(e) => setCompanyInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
@@ -117,7 +117,7 @@ const CompanySearch = () => {
 
       <Button 
         onClick={handleSearch} 
-        disabled={loading || !domain.trim()}
+        disabled={loading || !companyInput.trim()}
         className="w-full md:w-auto"
         size="lg"
       >

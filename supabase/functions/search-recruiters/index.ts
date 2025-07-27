@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface SearchRequest {
-  domain: string;
+  companyInput: string;
 }
 
 interface EmailProvider {
@@ -148,16 +148,31 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { domain }: SearchRequest = await req.json();
+    const { companyInput }: SearchRequest = await req.json();
     
-    if (!domain) {
+    if (!companyInput) {
       return new Response(
-        JSON.stringify({ error: "Domain is required" }),
+        JSON.stringify({ error: "Company name or domain is required" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    console.log(`Searching for recruiters at domain: ${domain} using email providers only`);
+    // Determine if input is a domain or company name
+    const isDomain = companyInput.includes('.');
+    let domain: string;
+    let companyName: string;
+    
+    if (isDomain) {
+      domain = companyInput;
+      // Extract company name from domain
+      companyName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+    } else {
+      companyName = companyInput;
+      // Generate domain from company name
+      domain = `${companyName.toLowerCase().replace(/\s+/g, '')}.com`;
+    }
+
+    console.log(`Searching for recruiters - Company: ${companyName}, Domain: ${domain}`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -176,14 +191,11 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Available email providers: ${emailProviders.map(p => p.name).join(', ')}`);
 
-    // Extract company name from domain
-    const companyName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
-    
     // Check if company already exists
     const { data: existingCompany } = await supabase
       .from('companies')
       .select('*')
-      .eq('domain', domain)
+      .or(`name.ilike.%${companyName}%,domain.eq.${domain}`)
       .maybeSingle();
 
     let companyRecord;
