@@ -238,7 +238,8 @@ async function sendEmailWithRetry(
       return { sent: true, delivered: true };
 
     } catch (error: any) {
-      console.error(`Attempt ${attempt} failed for ${emailData.to[0]}:`, error.message);
+      console.error(`Attempt ${attempt} failed for ${emailData.to[0]}:`, error);
+      console.error('Full error details:', JSON.stringify(error));
       
       if (attempt === maxRetries) {
         // Final failure - update log
@@ -246,7 +247,7 @@ async function sendEmailWithRetry(
           .from('email_logs')
           .update({
             status: 'failed',
-            error_message: error.message
+            error_message: error.message || JSON.stringify(error)
           })
           .eq('id', emailLogId);
         
