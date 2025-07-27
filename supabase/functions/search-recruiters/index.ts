@@ -13,22 +13,23 @@ interface SearchRequest {
 
 interface EmailProvider {
   name: string;
-  findEmail: (firstName: string, lastName: string, domain: string) => Promise<{ email: string | null; status: string; error?: string }>;
+  findEmail: (department: string, domain: string) => Promise<{ email: string | null; status: string; error?: string }>;
 }
 
 // Email provider implementations
 const createEmailProviders = (): EmailProvider[] => {
   const providers: EmailProvider[] = [];
 
-  // Hunter.io
+  // Hunter.io - Use domain search for HR/recruiting roles
   const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
   if (hunterApiKey) {
     providers.push({
       name: 'Hunter.io',
-      findEmail: async (firstName: string, lastName: string, domain: string) => {
+      findEmail: async (department: string, domain: string) => {
         try {
+          // Use domain search to find emails related to HR/recruiting
           const response = await fetch(
-            `https://api.hunter.io/v2/email-finder?domain=${domain}&first_name=${firstName}&last_name=${lastName}&api_key=${hunterApiKey}`,
+            `https://api.hunter.io/v2/domain-search?domain=${domain}&department=${department}&api_key=${hunterApiKey}`,
             { method: 'GET' }
           );
           
@@ -41,9 +42,19 @@ const createEmailProviders = (): EmailProvider[] => {
           }
 
           const data = await response.json();
+          // Look for HR/recruiting related emails
+          const hrEmails = data.data?.emails?.filter((email: any) => 
+            email.department === 'hr' || 
+            email.department === 'human resources' ||
+            email.position?.toLowerCase().includes('recruit') ||
+            email.position?.toLowerCase().includes('talent') ||
+            email.position?.toLowerCase().includes('hr')
+          );
+          
+          const foundEmail = hrEmails?.[0]?.value || data.data?.emails?.[0]?.value;
           return {
-            email: data.data?.email || null,
-            status: data.data?.confidence > 70 ? 'high_confidence' : 'low_confidence'
+            email: foundEmail || null,
+            status: foundEmail ? 'found' : 'not_found'
           };
         } catch (error) {
           return { email: null, status: 'error', error: error.message };
@@ -52,52 +63,12 @@ const createEmailProviders = (): EmailProvider[] => {
     });
   }
 
-  // Snov.io
-  const snovApiKey = Deno.env.get('SNOV_API_KEY');
-  if (snovApiKey) {
-    providers.push({
-      name: 'Snov.io',
-      findEmail: async (firstName: string, lastName: string, domain: string) => {
-        try {
-          const response = await fetch('https://app.snov.io/restapi/get-emails-from-names', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${snovApiKey}`
-            },
-            body: JSON.stringify({
-              firstName,
-              lastName,
-              domain
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
-              return { email: null, status: 'limit_reached', error: 'API limit reached' };
-            }
-            return { email: null, status: 'error', error: `HTTP ${response.status}` };
-          }
-
-          const data = await response.json();
-          return {
-            email: data.emails?.[0]?.email || null,
-            status: data.emails?.[0]?.email ? 'found' : 'not_found'
-          };
-        } catch (error) {
-          return { email: null, status: 'error', error: error.message };
-        }
-      }
-    });
-  }
-
-  // RocketReach
+  // RocketReach - Search by job title keywords
   const rocketreachApiKey = Deno.env.get('ROCKETREACH_API_KEY');
   if (rocketreachApiKey) {
     providers.push({
       name: 'RocketReach',
-      findEmail: async (firstName: string, lastName: string, domain: string) => {
+      findEmail: async (department: string, domain: string) => {
         try {
           const response = await fetch('https://api.rocketreach.co/v1/api/search', {
             method: 'POST',
@@ -107,8 +78,8 @@ const createEmailProviders = (): EmailProvider[] => {
             },
             body: JSON.stringify({
               query: {
-                name: [`${firstName} ${lastName}`],
-                current_employer: [domain.split('.')[0]]
+                current_employer: [domain.split('.')[0]],
+                title: [department, 'recruiter', 'talent acquisition', 'hr manager', 'human resources']
               }
             })
           });
@@ -134,89 +105,11 @@ const createEmailProviders = (): EmailProvider[] => {
     });
   }
 
-  // Voila Norbert
-  const voilaNorbertApiKey = Deno.env.get('VOILA_NORBERT_API_KEY');
-  if (voilaNorbertApiKey) {
-    providers.push({
-      name: 'Voila Norbert',
-      findEmail: async (firstName: string, lastName: string, domain: string) => {
-        try {
-          const response = await fetch('https://api.voilanorbert.com/2018-01-08/search/name', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${voilaNorbertApiKey}`
-            },
-            body: JSON.stringify({
-              name: `${firstName} ${lastName}`,
-              domain
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
-              return { email: null, status: 'limit_reached', error: 'API limit reached' };
-            }
-            return { email: null, status: 'error', error: `HTTP ${response.status}` };
-          }
-
-          const data = await response.json();
-          return {
-            email: data.email?.email || null,
-            status: data.email?.score > 70 ? 'high_confidence' : 'low_confidence'
-          };
-        } catch (error) {
-          return { email: null, status: 'error', error: error.message };
-        }
-      }
-    });
-  }
-
-  // FindThatLead
-  const findThatLeadApiKey = Deno.env.get('FINDTHATLEAD_API_KEY');
-  if (findThatLeadApiKey) {
-    providers.push({
-      name: 'FindThatLead',
-      findEmail: async (firstName: string, lastName: string, domain: string) => {
-        try {
-          const response = await fetch('https://api.findthatlead.com/v1/getEmail', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${findThatLeadApiKey}`
-            },
-            body: JSON.stringify({
-              name: `${firstName} ${lastName}`,
-              domain
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            if (response.status === 402 || errorText.includes('limit') || errorText.includes('quota')) {
-              return { email: null, status: 'limit_reached', error: 'API limit reached' };
-            }
-            return { email: null, status: 'error', error: `HTTP ${response.status}` };
-          }
-
-          const data = await response.json();
-          return {
-            email: data.email || null,
-            status: data.email ? 'found' : 'not_found'
-          };
-        } catch (error) {
-          return { email: null, status: 'error', error: error.message };
-        }
-      }
-    });
-  }
-
   return providers;
 };
 
 // Multi-provider email finder with automatic fallback
-const findEmailWithFallback = async (firstName: string, lastName: string, domain: string): Promise<{ email: string | null; status: string; provider?: string }> => {
+const findEmailWithFallback = async (department: string, domain: string): Promise<{ email: string | null; status: string; provider?: string }> => {
   const providers = createEmailProviders();
   
   if (providers.length === 0) {
@@ -224,9 +117,9 @@ const findEmailWithFallback = async (firstName: string, lastName: string, domain
   }
 
   for (const provider of providers) {
-    console.log(`Trying ${provider.name} for ${firstName} ${lastName}@${domain}`);
+    console.log(`Trying ${provider.name} for ${department} department at ${domain}`);
     
-    const result = await provider.findEmail(firstName, lastName, domain);
+    const result = await provider.findEmail(department, domain);
     
     if (result.email) {
       console.log(`Found email with ${provider.name}: ${result.email}`);
@@ -321,53 +214,66 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Created new company: ${companyRecord.name}`);
     }
 
-    // Common HR/recruiting email patterns to try
-    const hrEmailPatterns = [
-      'hr', 'recruiting', 'talent', 'careers', 'jobs', 'recruitment',
-      'humanresources', 'talentacquisition', 'universityrecruiting',
-      'earlycareers', 'people', 'hiring', 'recruiter'
+    // HR/recruiting departments to search for
+    const hrDepartments = [
+      'hr', 'human resources', 'recruiting', 'talent acquisition', 
+      'university recruiting', 'early careers', 'people operations',
+      'talent', 'careers', 'recruitment'
     ];
 
     const recruiters = [];
-    console.log(`Searching for HR/recruiting emails at domain: ${companyDomain}`);
+    console.log(`Searching for HR/recruiting contacts at domain: ${companyDomain}`);
 
-    // First try common HR/recruiting email patterns
-    for (const pattern of hrEmailPatterns) {
-      const email = `${pattern}@${companyDomain}`;
-      console.log(`Trying HR email pattern: ${email}`);
+    // Try to find emails using the email providers for each department
+    for (const department of hrDepartments) {
+      console.log(`Searching for ${department} contacts`);
       
-      // Check if this email pattern recruiter already exists
-      const { data: existingRecruiter } = await supabase
-        .from('recruiters')
-        .select('*')
-        .eq('company_id', companyRecord.id)
-        .eq('email', email)
-        .maybeSingle();
-
-      if (!existingRecruiter) {
-        // Create recruiter with department-based email
-        const { data: newRecruiter, error: insertError } = await supabase
+      const emailResult = await findEmailWithFallback(department, companyDomain);
+      
+      if (emailResult.email) {
+        console.log(`Found email via ${emailResult.provider}: ${emailResult.email}`);
+        
+        // Check if recruiter already exists
+        const { data: existingRecruiter } = await supabase
           .from('recruiters')
-          .insert({
-            company_id: companyRecord.id,
-            first_name: pattern.charAt(0).toUpperCase() + pattern.slice(1),
-            last_name: 'Team',
-            email: email,
-            title: `${pattern.charAt(0).toUpperCase() + pattern.slice(1)} Department`,
-            email_status: 'unverified',
-          })
-          .select()
-          .single();
+          .select('*')
+          .eq('company_id', companyRecord.id)
+          .eq('email', emailResult.email)
+          .maybeSingle();
 
-        if (!insertError) {
-          recruiters.push({ ...newRecruiter, email_provider: 'pattern_based' });
-          console.log(`Added HR email pattern: ${email}`);
+        if (!existingRecruiter) {
+          // Map provider status to valid database values
+          let dbEmailStatus = 'unknown';
+          if (emailResult.status === 'found' || emailResult.status === 'high_confidence') {
+            dbEmailStatus = 'valid';
+          } else if (emailResult.status === 'low_confidence') {
+            dbEmailStatus = 'risky';
+          }
+
+          // Create new recruiter
+          const { data: newRecruiter, error: insertError } = await supabase
+            .from('recruiters')
+            .insert({
+              company_id: companyRecord.id,
+              first_name: department.charAt(0).toUpperCase() + department.slice(1),
+              last_name: 'Contact',
+              email: emailResult.email,
+              title: `${department.charAt(0).toUpperCase() + department.slice(1)} Department`,
+              email_status: dbEmailStatus,
+            })
+            .select()
+            .single();
+
+          if (!insertError) {
+            recruiters.push({ ...newRecruiter, email_provider: emailResult.provider });
+          } else {
+            console.error('Error creating recruiter:', insertError);
+          }
         } else {
-          console.error('Error creating recruiter:', insertError);
+          recruiters.push({ ...existingRecruiter, email_provider: emailResult.provider });
         }
       } else {
-        recruiters.push({ ...existingRecruiter, email_provider: 'existing' });
-        console.log(`Email pattern already exists: ${email}`);
+        console.log(`No email found for ${department} department`);
       }
     }
 
