@@ -11,7 +11,6 @@ interface SearchRequest {
   companyInput: string;
 }
 
-// A raw contact found from an API provider
 interface RawContact {
   email: string;
   firstName?: string;
@@ -22,41 +21,36 @@ interface RawContact {
 
 interface EmailProvider {
   name: string;
-  // The function should now return a promise that resolves to an array of all contacts found
+  // --- CHANGE 1: The function now accepts companyName for more accurate searches ---
   findAllEmails: (
-    domain: string
+    domain: string,
+    companyName: string
   ) => Promise<{ contacts: RawContact[]; error?: string }>;
 }
 
-// --- Enhanced Email Provider Implementations ---
 const createEmailProviders = (): EmailProvider[] => {
   const providers: EmailProvider[] = [];
 
-  // Hunter.io - Now processes all relevant emails from the domain search
+  // Hunter.io Provider (mostly uses domain, so it's less affected but we'll keep the signature consistent)
   const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
   if (hunterApiKey) {
     providers.push({
       name: "Hunter.io",
-      findAllEmails: async (domain: string) => {
+      findAllEmails: async (domain: string, _companyName: string) => {
+        // companyName is ignored here
         try {
           const response = await fetch(
             `https://api.hunter.io/v2/domain-search?domain=${domain}&department=hr,recruiting,talent&api_key=${hunterApiKey}`,
             { method: "GET" }
           );
-
-          if (!response.ok) {
+          if (!response.ok)
             return {
               contacts: [],
               error: `Hunter.io API error: HTTP ${response.status}`,
             };
-          }
-
           const data = await response.json();
           const contacts: RawContact[] = [];
-
-          // Process ALL emails returned from the API
           data.data?.emails?.forEach((emailInfo: any) => {
-            // Filter for relevant roles
             const position = emailInfo.position?.toLowerCase() || "";
             const department = emailInfo.department?.toLowerCase() || "";
             if (
@@ -74,7 +68,6 @@ const createEmailProviders = (): EmailProvider[] => {
               });
             }
           });
-
           return { contacts };
         } catch (error) {
           return { contacts: [], error: error.message };
@@ -83,15 +76,17 @@ const createEmailProviders = (): EmailProvider[] => {
     });
   }
 
-  // RocketReach - Now processes all profiles from the search
+  // RocketReach Provider
   const rocketreachApiKey = Deno.env.get("ROCKETREACH_API_KEY");
   if (rocketreachApiKey) {
     providers.push({
       name: "RocketReach",
-      findAllEmails: async (domain: string) => {
+      // --- CHANGE 2: This function now uses the accurate companyName for its query ---
+      findAllEmails: async (domain: string, companyName: string) => {
         try {
+          // We use a broader query here to increase chances of finding someone
           const response = await fetch(
-            "https://api.rocketreach.co/v1/api/search",
+            "https://api.rocketreach.co/v2/api/search",
             {
               method: "POST",
               headers: {
@@ -100,34 +95,37 @@ const createEmailProviders = (): EmailProvider[] => {
               },
               body: JSON.stringify({
                 query: {
-                  current_employer: [domain.split(".")[0]], // Using company name from domain
+                  // Using companyName is more reliable than domain parts
+                  current_employer: [companyName],
                   title: [
                     "recruiter",
                     "talent acquisition",
-                    "hr manager",
                     "human resources",
                     "talent",
                   ],
                 },
+                start: 1,
+                size: 10, // Ask for up to 10 profiles to get a good list
               }),
             }
           );
 
-          if (!response.ok) {
+          if (!response.ok)
             return {
               contacts: [],
               error: `RocketReach API error: HTTP ${response.status}`,
             };
-          }
 
           const data = await response.json();
           const contacts: RawContact[] = [];
-
-          // Process ALL profiles returned from the API
           data.profiles?.forEach((profile: any) => {
-            if (profile.emails && profile.emails.length > 0) {
+            if (
+              profile.emails &&
+              profile.emails.length > 0 &&
+              profile.emails[0].email
+            ) {
               contacts.push({
-                email: profile.emails[0].email, // Assuming the first email is the most relevant
+                email: profile.emails[0].email,
                 firstName: profile.first_name || "HR",
                 lastName: profile.last_name || "Contact",
                 title: profile.current_title || "Recruiter",
@@ -135,7 +133,6 @@ const createEmailProviders = (): EmailProvider[] => {
               });
             }
           });
-
           return { contacts };
         } catch (error) {
           return { contacts: [], error: error.message };
@@ -147,9 +144,10 @@ const createEmailProviders = (): EmailProvider[] => {
   return providers;
 };
 
-// --- New function to find all emails from all providers ---
+// --- CHANGE 3: The main finder function now accepts and passes companyName ---
 const findAllEmailsFromDomain = async (
-  domain: string
+  domain: string,
+  companyName: string
 ): Promise<RawContact[]> => {
   const providers = createEmailProviders();
   if (providers.length === 0) {
@@ -157,28 +155,22 @@ const findAllEmailsFromDomain = async (
     return [];
   }
 
-  // Use Promise.all to query all providers simultaneously for better performance
+  // Pass both domain and companyName to each provider
   const results = await Promise.all(
     providers.map((provider) => {
-      console.log(`Querying ${provider.name} for domain: ${domain}`);
-      return provider.findAllEmails(domain);
+      console.log(`Querying ${provider.name} for company: ${companyName}`);
+      return provider.findAllEmails(domain, companyName);
     })
   );
 
-  // Use a Map to store unique emails, ensuring no duplicates are processed
   const uniqueContacts = new Map<string, RawContact>();
-
   results.forEach((result) => {
-    if (result.contacts) {
-      result.contacts.forEach((contact) => {
-        if (!uniqueContacts.has(contact.email)) {
-          uniqueContacts.set(contact.email, contact);
-        }
-      });
-    }
-    if (result.error) {
-      console.error(result.error);
-    }
+    result.contacts?.forEach((contact) => {
+      if (contact.email && !uniqueContacts.has(contact.email)) {
+        uniqueContacts.set(contact.email, contact);
+      }
+    });
+    if (result.error) console.error(result.error);
   });
 
   return Array.from(uniqueContacts.values());
@@ -203,8 +195,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     const isDomain = companyInput.includes(".");
     const domain = isDomain
-      ? companyInput
-      : `${companyInput.toLowerCase().replace(/\s+/g, "")}.com`;
+      ? companyInput.toLowerCase()
+      : `${companyInput.toLowerCase().replace(/[\s,.]+/g, "")}.com`;
     const companyName = isDomain
       ? domain.split(".")[0].charAt(0).toUpperCase() +
         domain.split(".")[0].slice(1)
@@ -219,7 +211,6 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Check for existing company or create a new one
     let { data: companyRecord } = await supabase
       .from("companies")
       .select("*")
@@ -227,25 +218,17 @@ const handler = async (req: Request): Promise<Response> => {
       .single();
 
     if (!companyRecord) {
-      console.log(`Creating new company: ${companyName}`);
-      const { data: newCompany, error: insertError } = await supabase
+      const { data: newCompany, error } = await supabase
         .from("companies")
-        .insert({
-          name: companyName,
-          domain: domain,
-          location: "United States",
-        })
+        .insert({ name: companyName, domain, location: "United States" })
         .select()
         .single();
-      if (insertError)
-        throw new Error(`Failed to create company: ${insertError.message}`);
+      if (error) throw new Error(`Failed to create company: ${error.message}`);
       companyRecord = newCompany;
-    } else {
-      console.log(`Using existing company: ${companyRecord.name}`);
     }
 
-    // Find all possible recruiter emails from all configured providers
-    const allFoundContacts = await findAllEmailsFromDomain(domain);
+    // --- CHANGE 4: Pass both domain and companyName to the finder function ---
+    const allFoundContacts = await findAllEmailsFromDomain(domain, companyName);
     console.log(
       `Found a total of ${allFoundContacts.length} unique potential contacts from all providers.`
     );
@@ -253,16 +236,20 @@ const handler = async (req: Request): Promise<Response> => {
     const recruiters: any[] = [];
     if (allFoundContacts.length > 0) {
       for (const contact of allFoundContacts) {
-        // Check if this specific recruiter email already exists for this company
         const { data: existingRecruiter } = await supabase
           .from("recruiters")
-          .select("id")
+          .select("*")
           .eq("company_id", companyRecord.id)
           .eq("email", contact.email)
           .maybeSingle();
 
-        if (!existingRecruiter) {
-          console.log(`Adding new recruiter: ${contact.email}`);
+        if (existingRecruiter) {
+          recruiters.push({
+            ...existingRecruiter,
+            email_provider: contact.provider,
+            status: "existing",
+          });
+        } else {
           const { data: newRecruiter, error } = await supabase
             .from("recruiters")
             .insert({
@@ -271,30 +258,27 @@ const handler = async (req: Request): Promise<Response> => {
               last_name: contact.lastName,
               email: contact.email,
               title: contact.title,
-              email_status: "valid", // Assume valid for now, verification can be a separate step
+              email_status: "valid",
             })
             .select()
             .single();
 
-          if (error) {
+          if (error)
             console.error(`Error creating recruiter ${contact.email}:`, error);
-          } else {
+          else if (newRecruiter)
             recruiters.push({
               ...newRecruiter,
               email_provider: contact.provider,
+              status: "new",
             });
-          }
-        } else {
-          console.log(`Recruiter ${contact.email} already exists. Skipping.`);
         }
       }
     }
 
     const message =
       recruiters.length > 0
-        ? `Successfully added ${recruiters.length} new recruiter contacts!`
-        : "No new recruiter emails were found or added. They may already exist in the database.";
-
+        ? `Found and processed ${recruiters.length} recruiter contacts.`
+        : "No recruiter emails were found by the configured providers.";
     return new Response(
       JSON.stringify({
         company: companyRecord,
