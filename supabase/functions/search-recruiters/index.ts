@@ -21,7 +21,6 @@ interface RawContact {
 
 interface EmailProvider {
   name: string;
-  // --- CHANGE 1: The function now accepts companyName for more accurate searches ---
   findAllEmails: (
     domain: string,
     companyName: string
@@ -31,18 +30,19 @@ interface EmailProvider {
 const createEmailProviders = (): EmailProvider[] => {
   const providers: EmailProvider[] = [];
 
-  // Hunter.io Provider (mostly uses domain, so it's less affected but we'll keep the signature consistent)
   const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
   if (hunterApiKey) {
     providers.push({
       name: "Hunter.io",
       findAllEmails: async (domain: string, _companyName: string) => {
-        // companyName is ignored here
         try {
+          // --- CHANGE 1: Added 'department' filter to the API call ---
+          // This tells Hunter to only return contacts from these specific departments.
           const response = await fetch(
-            `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${hunterApiKey}`,
+            `https://api.hunter.io/v2/domain-search?domain=${domain}&department=human%20resources,recruiting,talent&api_key=${hunterApiKey}`,
             { method: "GET" }
           );
+
           if (!response.ok)
             return {
               contacts: [],
@@ -67,15 +67,12 @@ const createEmailProviders = (): EmailProvider[] => {
     });
   }
 
-  // RocketReach Provider
   const rocketreachApiKey = Deno.env.get("ROCKETREACH_API_KEY");
   if (rocketreachApiKey) {
     providers.push({
       name: "RocketReach",
-      // --- CHANGE 2: This function now uses the accurate companyName for its query ---
-      findAllEmails: async (domain: string, companyName: string) => {
+      findAllEmails: async (_domain: string, companyName: string) => {
         try {
-          // We use a broader query here to increase chances of finding someone
           const response = await fetch(
             "https://api.rocketreach.co/v2/api/search",
             {
@@ -84,14 +81,22 @@ const createEmailProviders = (): EmailProvider[] => {
                 "Content-Type": "application/json",
                 "Api-Key": rocketreachApiKey,
               },
-               body: JSON.stringify({
-                 query: {
-                   // Using companyName is more reliable than domain parts
-                   current_employer: [companyName],
-                 },
-                 start: 1,
-                 size: 100, // Get up to 100 profiles to maximize results
-               }),
+              body: JSON.stringify({
+                query: {
+                  current_employer: [companyName],
+                  // --- CHANGE 2: Added 'title' filter to the API query ---
+                  // This tells RocketReach to only return profiles with HR-related titles.
+                  title: [
+                    "recruiter",
+                    "talent acquisition",
+                    "human resources",
+                    "hr",
+                    "talent",
+                  ],
+                },
+                start: 1,
+                size: 20, // Ask for up to 20 relevant profiles
+              }),
             }
           );
 
@@ -129,7 +134,6 @@ const createEmailProviders = (): EmailProvider[] => {
   return providers;
 };
 
-// --- CHANGE 3: The main finder function now accepts and passes companyName ---
 const findAllEmailsFromDomain = async (
   domain: string,
   companyName: string
@@ -140,10 +144,11 @@ const findAllEmailsFromDomain = async (
     return [];
   }
 
-  // Pass both domain and companyName to each provider
   const results = await Promise.all(
     providers.map((provider) => {
-      console.log(`Querying ${provider.name} for company: ${companyName}`);
+      console.log(
+        `Querying ${provider.name} for HR contacts at: ${companyName}`
+      );
       return provider.findAllEmails(domain, companyName);
     })
   );
@@ -212,10 +217,9 @@ const handler = async (req: Request): Promise<Response> => {
       companyRecord = newCompany;
     }
 
-    // --- CHANGE 4: Pass both domain and companyName to the finder function ---
     const allFoundContacts = await findAllEmailsFromDomain(domain, companyName);
     console.log(
-      `Found a total of ${allFoundContacts.length} unique potential contacts from all providers.`
+      `Found ${allFoundContacts.length} unique HR contacts from all providers.`
     );
 
     const recruiters: any[] = [];
