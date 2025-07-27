@@ -40,7 +40,7 @@ const createEmailProviders = (): EmailProvider[] => {
         // companyName is ignored here
         try {
           const response = await fetch(
-            `https://api.hunter.io/v2/domain-search?domain=${domain}&department=hr,recruiting,talent&api_key=${hunterApiKey}`,
+            `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${hunterApiKey}`,
             { method: "GET" }
           );
           if (!response.ok)
@@ -51,22 +51,13 @@ const createEmailProviders = (): EmailProvider[] => {
           const data = await response.json();
           const contacts: RawContact[] = [];
           data.data?.emails?.forEach((emailInfo: any) => {
-            const position = emailInfo.position?.toLowerCase() || "";
-            const department = emailInfo.department?.toLowerCase() || "";
-            if (
-              department.includes("hr") ||
-              department.includes("human resources") ||
-              position.includes("recruit") ||
-              position.includes("talent")
-            ) {
-              contacts.push({
-                email: emailInfo.value,
-                firstName: emailInfo.first_name || "HR",
-                lastName: emailInfo.last_name || "Contact",
-                title: emailInfo.position || "Recruiter",
-                provider: "Hunter.io",
-              });
-            }
+            contacts.push({
+              email: emailInfo.value,
+              firstName: emailInfo.first_name || "Contact",
+              lastName: emailInfo.last_name || "Person",
+              title: emailInfo.position || "Employee",
+              provider: "Hunter.io",
+            });
           });
           return { contacts };
         } catch (error) {
@@ -93,20 +84,14 @@ const createEmailProviders = (): EmailProvider[] => {
                 "Content-Type": "application/json",
                 "Api-Key": rocketreachApiKey,
               },
-              body: JSON.stringify({
-                query: {
-                  // Using companyName is more reliable than domain parts
-                  current_employer: [companyName],
-                  title: [
-                    "recruiter",
-                    "talent acquisition",
-                    "human resources",
-                    "talent",
-                  ],
-                },
-                start: 1,
-                size: 10, // Ask for up to 10 profiles to get a good list
-              }),
+               body: JSON.stringify({
+                 query: {
+                   // Using companyName is more reliable than domain parts
+                   current_employer: [companyName],
+                 },
+                 start: 1,
+                 size: 100, // Get up to 100 profiles to maximize results
+               }),
             }
           );
 
