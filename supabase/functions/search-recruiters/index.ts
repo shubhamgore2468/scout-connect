@@ -7,8 +7,7 @@ const corsHeaders = {
 };
 
 interface SearchRequest {
-  companyName: string;
-  domain?: string;
+  domain: string;
 }
 
 interface EmailProvider {
@@ -149,16 +148,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { companyName, domain }: SearchRequest = await req.json();
+    const { domain }: SearchRequest = await req.json();
     
-    if (!companyName) {
+    if (!domain) {
       return new Response(
-        JSON.stringify({ error: "Company name is required" }),
+        JSON.stringify({ error: "Domain is required" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    console.log(`Searching for company: ${companyName} using email providers only`);
+    console.log(`Searching for recruiters at domain: ${domain} using email providers only`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -177,14 +176,14 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Available email providers: ${emailProviders.map(p => p.name).join(', ')}`);
 
-    // Create a simple company record (without Apollo data)
-    const companyDomain = domain || `${companyName.toLowerCase().replace(/\s+/g, '')}.com`;
+    // Extract company name from domain
+    const companyName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
     
     // Check if company already exists
     const { data: existingCompany } = await supabase
       .from('companies')
       .select('*')
-      .or(`name.ilike.%${companyName}%,domain.eq.${companyDomain}`)
+      .eq('domain', domain)
       .maybeSingle();
 
     let companyRecord;
@@ -197,7 +196,7 @@ const handler = async (req: Request): Promise<Response> => {
         .from('companies')
         .insert({
           name: companyName,
-          domain: companyDomain,
+          domain: domain,
           location: 'United States',
         })
         .select()
@@ -222,13 +221,13 @@ const handler = async (req: Request): Promise<Response> => {
     ];
 
     const recruiters = [];
-    console.log(`Searching for HR/recruiting contacts at domain: ${companyDomain}`);
+    console.log(`Searching for HR/recruiting contacts at domain: ${domain}`);
 
     // Try to find emails using the email providers for each department
     for (const department of hrDepartments) {
       console.log(`Searching for ${department} contacts`);
       
-      const emailResult = await findEmailWithFallback(department, companyDomain);
+      const emailResult = await findEmailWithFallback(department, domain);
       
       if (emailResult.email) {
         console.log(`Found email via ${emailResult.provider}: ${emailResult.email}`);

@@ -36,17 +36,16 @@ interface SearchResult {
 }
 
 const CompanySearch = () => {
-  const [companyName, setCompanyName] = useState("");
   const [domain, setDomain] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const { toast } = useToast();
 
   const handleSearch = async () => {
-    if (!companyName.trim()) {
+    if (!domain.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a company name",
+        description: "Please enter a domain name",
         variant: "destructive",
       });
       return;
@@ -56,8 +55,7 @@ const CompanySearch = () => {
     try {
       const { data, error } = await supabase.functions.invoke('search-recruiters', {
         body: {
-          companyName: companyName.trim(),
-          domain: domain.trim() || undefined,
+          domain: domain.trim(),
         },
       });
 
@@ -104,22 +102,12 @@ const CompanySearch = () => {
   return (
     <div className="space-y-6">
       {/* Search Form */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 space-y-2">
-          <Label htmlFor="company-name">Company Name *</Label>
-          <Input
-            id="company-name"
-            placeholder="e.g., Tesla, Microsoft, Stripe"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          />
-        </div>
+      <div className="grid grid-cols-1 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="domain">Domain (optional)</Label>
+          <Label htmlFor="domain">Domain Name *</Label>
           <Input
             id="domain"
-            placeholder="e.g., tesla.com"
+            placeholder="e.g., tesla.com, microsoft.com, stripe.com"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -129,7 +117,7 @@ const CompanySearch = () => {
 
       <Button 
         onClick={handleSearch} 
-        disabled={loading || !companyName.trim()}
+        disabled={loading || !domain.trim()}
         className="w-full md:w-auto"
         size="lg"
       >
