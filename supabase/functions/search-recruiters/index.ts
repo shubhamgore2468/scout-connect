@@ -321,70 +321,53 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Created new company: ${companyRecord.name}`);
     }
 
-    // Common recruiter and HR names to try
-    const commonRecruiterNames = [
-      { first: 'Sarah', last: 'Johnson', title: 'Senior Recruiter' },
-      { first: 'Michael', last: 'Smith', title: 'Talent Acquisition Manager' },
-      { first: 'Jessica', last: 'Williams', title: 'HR Manager' },
-      { first: 'David', last: 'Brown', title: 'Recruiting Manager' },
-      { first: 'Emily', last: 'Davis', title: 'Talent Partner' },
-      { first: 'John', last: 'Wilson', title: 'Senior Talent Acquisition Specialist' },
-      { first: 'Amanda', last: 'Miller', title: 'HR Business Partner' },
-      { first: 'Chris', last: 'Anderson', title: 'Recruiting Coordinator' },
-      { first: 'Jennifer', last: 'Taylor', title: 'People Operations Manager' },
-      { first: 'Robert', last: 'Thomas', title: 'Director of Talent Acquisition' },
-      { first: 'Lisa', last: 'Garcia', title: 'VP of People' },
-      { first: 'Mark', last: 'Rodriguez', title: 'Head of Talent' }
+    // Common HR/recruiting email patterns to try
+    const hrEmailPatterns = [
+      'hr', 'recruiting', 'talent', 'careers', 'jobs', 'recruitment',
+      'humanresources', 'talentacquisition', 'universityrecruiting',
+      'earlycareers', 'people', 'hiring', 'recruiter'
     ];
 
     const recruiters = [];
-    console.log(`Searching for emails at domain: ${companyDomain}`);
+    console.log(`Searching for HR/recruiting emails at domain: ${companyDomain}`);
 
-    for (const person of commonRecruiterNames) {
-      console.log(`Trying to find email for: ${person.first} ${person.last}`);
+    // First try common HR/recruiting email patterns
+    for (const pattern of hrEmailPatterns) {
+      const email = `${pattern}@${companyDomain}`;
+      console.log(`Trying HR email pattern: ${email}`);
       
-      const emailResult = await findEmailWithFallback(
-        person.first,
-        person.last,
-        companyDomain
-      );
-      
-      if (emailResult.email) {
-        console.log(`Found email via ${emailResult.provider}: ${emailResult.email}`);
-        
-        // Check if recruiter already exists
-        const { data: existingRecruiter } = await supabase
+      // Check if this email pattern recruiter already exists
+      const { data: existingRecruiter } = await supabase
+        .from('recruiters')
+        .select('*')
+        .eq('company_id', companyRecord.id)
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!existingRecruiter) {
+        // Create recruiter with department-based email
+        const { data: newRecruiter, error: insertError } = await supabase
           .from('recruiters')
-          .select('*')
-          .eq('company_id', companyRecord.id)
-          .eq('email', emailResult.email)
-          .maybeSingle();
+          .insert({
+            company_id: companyRecord.id,
+            first_name: pattern.charAt(0).toUpperCase() + pattern.slice(1),
+            last_name: 'Team',
+            email: email,
+            title: `${pattern.charAt(0).toUpperCase() + pattern.slice(1)} Department`,
+            email_status: 'unverified',
+          })
+          .select()
+          .single();
 
-        if (!existingRecruiter) {
-          // Create new recruiter
-          const { data: newRecruiter, error: insertError } = await supabase
-            .from('recruiters')
-            .insert({
-              company_id: companyRecord.id,
-              first_name: person.first,
-              last_name: person.last,
-              email: emailResult.email,
-              title: person.title,
-              email_status: emailResult.status,
-            })
-            .select()
-            .single();
-
-          if (!insertError) {
-            recruiters.push({ ...newRecruiter, email_provider: emailResult.provider });
-          } else {
-            console.error('Error creating recruiter:', insertError);
-          }
+        if (!insertError) {
+          recruiters.push({ ...newRecruiter, email_provider: 'pattern_based' });
+          console.log(`Added HR email pattern: ${email}`);
         } else {
-          recruiters.push({ ...existingRecruiter, email_provider: emailResult.provider });
+          console.error('Error creating recruiter:', insertError);
         }
       } else {
-        console.log(`No email found for ${person.first} ${person.last}`);
+        recruiters.push({ ...existingRecruiter, email_provider: 'existing' });
+        console.log(`Email pattern already exists: ${email}`);
       }
     }
 
