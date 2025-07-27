@@ -54,7 +54,7 @@ const CompanySearch = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('search-apollo', {
+      const { data, error } = await supabase.functions.invoke('search-recruiters', {
         body: {
           companyName: companyName.trim(),
           domain: domain.trim() || undefined,
@@ -136,7 +136,7 @@ const CompanySearch = () => {
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Searching Apollo.io...
+            Searching Recruiters...
           </>
         ) : (
           <>
